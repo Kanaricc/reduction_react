@@ -4,6 +4,7 @@ use serde::{Serialize, Deserialize};
 pub struct PackageTag{
     pub version:VersionTag,
     pub hash: String,
+    #[serde(rename = "downloadUrl")]
     pub download_url: String,
 }
 
@@ -89,6 +90,16 @@ impl VersionTag{
 
 impl From<String> for VersionTag{
     fn from(s: String) -> Self{
+        let mut parts = s.split(".");
+        let major = parts.next().unwrap().parse::<u32>().unwrap();
+        let minor = parts.next().unwrap().parse::<u32>().unwrap();
+        let patch = parts.next().unwrap().parse::<u32>().unwrap();
+        VersionTag::new(major, minor, patch)
+    }
+}
+
+impl From<&str> for VersionTag{
+    fn from(s: &str) -> Self{
         let mut parts = s.split(".");
         let major = parts.next().unwrap().parse::<u32>().unwrap();
         let minor = parts.next().unwrap().parse::<u32>().unwrap();

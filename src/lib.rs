@@ -1,21 +1,17 @@
-use std::{
-    io::{self, Write},
-    os::unix::prelude::AsRawFd,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 
-use data::PackageTag;
+use data::{PackageTag, VersionTag};
 use thiserror::Error;
 
 mod data;
-mod self_opt;
+mod utils;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("this os `{0}` is not supported")]
     UnsupportedOS(String),
-    #[error("failed to create script")]
-    ScriptIo {
+    #[error("failed to execute IO operation")]
+    FileError {
         #[from]
         source: std::io::Error,
     },
@@ -37,6 +33,7 @@ pub enum Error {
 }
 
 pub struct Reactor {
+    name: String,
     version: data::VersionTag,
     pulishing_url: String,
 }
@@ -47,8 +44,9 @@ pub enum CheckUpdateResult {
 }
 
 impl Reactor {
-    pub fn new(version: data::VersionTag, pulishing_url: String) -> Self {
+    pub fn new(name: String, version: data::VersionTag, pulishing_url: String) -> Self {
         Reactor {
+            name,
             version,
             pulishing_url,
         }
@@ -64,40 +62,79 @@ impl Reactor {
         }
     }
 
-    pub fn update(&self, package_tag: &PackageTag) -> Result<(), Error> {
-        let resp = reqwest::blocking::get(&package_tag.download_url)?.bytes()?;
-        let path = PathBuf::from(format!("temp-{}.zip", package_tag.version.as_string()));
-        let mut file = std::fs::File::create(&path)?;
-        file.write_all(&resp)?;
-        drop(file);
-        extract_zip(&path, PathBuf::from("./temp"))?;
+    pub fn self_update_if_available(&self) -> Result<(), Error> {
+        let mut other_version = self.find_other_available_versions()?;
+        other_version.sort();
+        // remove old versions
+        for i in other_version.iter() {
+            if i.0 <= self.version {
+                println!("remove old version: {:?}", i.0);
+                fs::remove_file(&i.1)?;
+            }
+        }
+
+        // start latest version
+        other_version.reverse();
+        if let Some(new_version) = other_version.get(0) {
+            if new_version.0 > self.version {
+                println!("find new local version: {:?}. restarting...", new_version.0);
+                std::process::Command::new(&new_version.1).spawn().unwrap();
+                std::process::exit(0);
+            }
+        } else {
+            // make self as default executable
+            let cur_path = std::env::current_exe()?;
+            if cur_path
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .find("-")
+                .is_some()
+            {
+                println!("replace default version. restarting...");
+                let new_path = cur_path
+                    .parent()
+                    .unwrap()
+                    .join(utils::get_executable_file_name(&self.name)?);
+                fs::copy(&cur_path, &new_path)?;
+                std::process::Command::new(new_path).spawn().unwrap();
+                std::process::exit(0);
+            }
+        }
 
         Ok(())
     }
-}
 
-fn extract_zip(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> Result<(), Error> {
-    let src = src.as_ref();
-    let dest= dest.as_ref();
-    if !dest.exists() {
-        std::fs::create_dir_all(&dest)?;
-    }
-    let mut zip = zip::ZipArchive::new(std::fs::File::open(&src)?)?;
-    for i in 0..zip.len() {
-        let mut file = zip.by_index(i)?;
-        if let Some(relative_path) = file.enclosed_name() {
-            let out_path = dest.join(relative_path);
-            println!("{}", out_path.display());
-            let out_dir = out_path.parent().unwrap();
-            if !out_dir.exists() {
-                std::fs::create_dir_all(out_dir)?;
+    fn find_other_available_versions(&self) -> Result<Vec<(VersionTag, PathBuf)>, Error> {
+        let paths = fs::read_dir(".")?;
+
+        let mut result = vec![];
+        for path in paths {
+            let path = path?;
+            let name = path.file_name();
+            let name = name.to_str().unwrap();
+            if name.starts_with(&self.name) {
+                let file_version = name.split(".").nth(0).unwrap().split("-").nth(1);
+                if let Some(file_version) = file_version {
+                    result.push((file_version.into(), path.path()));
+                }
             }
-            let mut out_file = std::fs::File::create(&out_path)?;
-            io::copy(&mut file, &mut out_file)?;
         }
+        Ok(result)
     }
 
-    Ok(())
+    pub fn update(&self, package_tag: &PackageTag) -> Result<(), Error> {
+        // update lib
+        utils::download_file(&package_tag.download_url, "temp.zip")?;
+        // TODO: check hash
+        let temp_dir = PathBuf::from("./temp");
+        utils::extract_zip("temp.zip", &temp_dir)?;
+        utils::copy(&temp_dir, ".")?;
+        std::fs::remove_dir_all(temp_dir)?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -107,6 +144,7 @@ mod tests {
     fn test_unzip() {
         let path = PathBuf::from("test.zip");
         let dest = PathBuf::from("./test");
-        extract_zip(&path, &dest).unwrap();
+        utils::extract_zip(&path, &dest).unwrap();
+        std::fs::remove_dir_all("./test").unwrap();
     }
 }
