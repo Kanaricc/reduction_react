@@ -44,12 +44,21 @@ pub enum CheckUpdateResult {
 }
 
 impl Reactor {
-    pub fn new(name: String, version: data::VersionTag, pulishing_url: String) -> Self {
+    pub fn new(name: impl Into<String>, version:impl Into<VersionTag>, pulishing_url: impl Into<String>) -> Self {
         Reactor {
-            name,
-            version,
-            pulishing_url,
+            name: name.into(),
+            version: version.into(),
+            pulishing_url: pulishing_url.into(),
         }
+    }
+
+    pub fn check_update_and_update(&self) -> Result<(), Error> {
+        let latest_version = self.check_update()?;
+        if let CheckUpdateResult::UpdateAvailable(latest_version) = latest_version {
+            self.update(&latest_version)?;
+        }
+
+        Ok(())
     }
 
     pub fn check_update(&self) -> Result<CheckUpdateResult, Error> {
