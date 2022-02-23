@@ -36,13 +36,13 @@ pub fn extract_zip(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> Result<(), 
         }
         if let Some(relative_path) = file.enclosed_name() {
             let out_path = dest.join(relative_path);
-            println!("{}", out_path.display());
             let out_dir = out_path.parent().unwrap();
             if !out_dir.exists() {
                 std::fs::create_dir_all(out_dir)?;
             }
             let mut out_file = std::fs::File::create(&out_path)?;
             io::copy(&mut file, &mut out_file)?;
+            println!("unzipped {}", out_path.display());
         }
     }
 
@@ -57,7 +57,7 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
     let input_root = PathBuf::from(from.as_ref()).components().count();
 
     while let Some(working_path) = stack.pop() {
-        // println!("process: {:?}", &working_path);
+        println!("process: {:?}", &working_path);
 
         // Generate a relative path
         let src: PathBuf = working_path.components().skip(input_root).collect();
@@ -69,7 +69,7 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
             output_root.join(&src)
         };
         if fs::metadata(&dest).is_err() {
-            // println!(" mkdir: {:?}", dest);
+            println!(" mkdir: {:?}", dest);
             fs::create_dir_all(&dest)?;
         }
 
@@ -82,11 +82,11 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
                 match path.file_name() {
                     Some(filename) => {
                         let dest_path = dest.join(filename);
-                        // println!("  copy: {:?} -> {:?}", &path, &dest_path);
+                        println!("  copy: {:?} -> {:?}", &path, &dest_path);
                         fs::copy(&path, &dest_path)?;
                     }
                     None => {
-                        // println!("failed: {:?}", path);
+                        println!("failed: {:?}", path);
                     }
                 }
             }

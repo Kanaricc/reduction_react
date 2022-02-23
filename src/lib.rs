@@ -1,4 +1,9 @@
-use std::{fs, path::PathBuf};
+use std::{
+    env,
+    fs::{self, Permissions},
+    os::unix::prelude::PermissionsExt,
+    path::PathBuf,
+};
 
 use data::{PackageTag, VersionTag};
 use thiserror::Error;
@@ -44,10 +49,27 @@ pub enum CheckUpdateResult {
 }
 
 impl Reactor {
-    pub fn new(name: impl Into<String>, version:impl Into<VersionTag>, pulishing_url: impl Into<String>) -> Self {
+    pub fn new(
+        name: impl Into<String>,
+        version: impl TryInto<VersionTag>,
+        pulishing_url: impl Into<String>,
+    ) -> Self {
+        let version = version.try_into();
+        if version.is_err() {
+            panic!("invalid version");
+        }
+        let version = version.unwrap_or_else(|_| VersionTag::new(0, 0, 0));
+        let self_name = env::current_exe().unwrap();
+        let mut self_version = self_name.file_name().unwrap().to_str().unwrap().split("-");
+        if let Some(name_version) = self_version.nth(1) {
+            let name_version: VersionTag = name_version.try_into().unwrap();
+            if version != name_version {
+                panic!("invalid version");
+            }
+        }
         Reactor {
             name: name.into(),
-            version: version.into(),
+            version: version,
             pulishing_url: pulishing_url.into(),
         }
     }
@@ -56,6 +78,8 @@ impl Reactor {
         let latest_version = self.check_update()?;
         if let CheckUpdateResult::UpdateAvailable(latest_version) = latest_version {
             self.update(&latest_version)?;
+        } else {
+            println!("{} is up to date", self.name);
         }
 
         Ok(())
@@ -87,29 +111,30 @@ impl Reactor {
         if let Some(new_version) = other_version.get(0) {
             if new_version.0 > self.version {
                 println!("find new local version: {:?}. restarting...", new_version.0);
+                fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))?;
                 std::process::Command::new(&new_version.1).spawn().unwrap();
                 std::process::exit(0);
             }
-        } else {
-            // make self as default executable
-            let cur_path = std::env::current_exe()?;
-            if cur_path
-                .file_name()
+        }
+
+        // make self as default executable
+        let cur_path = std::env::current_exe()?;
+        if cur_path
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .find("-")
+            .is_some()
+        {
+            println!("replace default version. restarting...");
+            let new_path = cur_path
+                .parent()
                 .unwrap()
-                .to_str()
-                .unwrap()
-                .find("-")
-                .is_some()
-            {
-                println!("replace default version. restarting...");
-                let new_path = cur_path
-                    .parent()
-                    .unwrap()
-                    .join(utils::get_executable_file_name(&self.name)?);
-                fs::copy(&cur_path, &new_path)?;
-                std::process::Command::new(new_path).spawn().unwrap();
-                std::process::exit(0);
-            }
+                .join(utils::get_executable_file_name(&self.name)?);
+            fs::copy(&cur_path, &new_path)?;
+            std::process::Command::new(new_path).spawn().unwrap();
+            std::process::exit(0);
         }
 
         Ok(())
@@ -124,9 +149,12 @@ impl Reactor {
             let name = path.file_name();
             let name = name.to_str().unwrap();
             if name.starts_with(&self.name) {
-                let file_version = name.split(".").nth(0).unwrap().split("-").nth(1);
+                let file_version = name.split("-").nth(1);
                 if let Some(file_version) = file_version {
-                    result.push((file_version.into(), path.path()));
+                    let file_version = file_version.try_into();
+                    if let Ok(version_tag) = file_version {
+                        result.push((version_tag, path.path()));
+                    }
                 }
             }
         }
@@ -139,11 +167,18 @@ impl Reactor {
         // TODO: check hash
         let temp_dir = PathBuf::from("./temp");
         utils::extract_zip("temp.zip", &temp_dir)?;
+        println!("finish extracting");
         utils::copy(&temp_dir, ".")?;
+        println!("replaced old data");
         std::fs::remove_dir_all(temp_dir)?;
+        println!("finish data update");
 
         Ok(())
     }
+}
+
+fn run_executable(){
+    
 }
 
 #[cfg(test)]

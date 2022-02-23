@@ -98,12 +98,17 @@ impl From<String> for VersionTag{
     }
 }
 
-impl From<&str> for VersionTag{
-    fn from(s: &str) -> Self{
-        let mut parts = s.split(".");
-        let major = parts.next().unwrap().parse::<u32>().unwrap();
-        let minor = parts.next().unwrap().parse::<u32>().unwrap();
-        let patch = parts.next().unwrap().parse::<u32>().unwrap();
-        VersionTag::new(major, minor, patch)
+impl TryFrom<&str> for VersionTag{
+    type Error = std::num::ParseIntError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let mut parts = value.split(".");
+        if parts.clone().count()<3{
+            "3q".parse::<u32>()?;
+        }
+        let major = parts.next().unwrap().parse::<u32>()?;
+        let minor = parts.next().unwrap().parse::<u32>()?;
+        let patch = parts.next().unwrap().parse::<u32>()?;
+        Ok(VersionTag::new(major, minor, patch))
     }
 }
