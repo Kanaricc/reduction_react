@@ -16,12 +16,13 @@ mod utils;
 pub enum Error {
     #[error("this os `{0}` is not supported")]
     UnsupportedOS(String),
-    #[error("failed to execute IO operation")]
-    FileError {
-        #[from]
+    #[error("failed to execute IO operation: {msg}")]
+    CommonFileError {
+        msg: String,
+        #[source]
         source: std::io::Error,
     },
-    #[error("failed to fetch data from the Internet")]
+    #[error("failed to fetch data from the publisher")]
     NetError {
         #[from]
         source: reqwest::Error,
@@ -112,7 +113,10 @@ impl Reactor {
         // remove old versions
         for i in other_version.iter() {
             if i.0 <= self.version {
-                fs::remove_file(&i.1)?;
+                fs::remove_file(&i.1).map_err(|err| Error::CommonFileError {
+                    msg: format!("failed to remove old version"),
+                    source: err,
+                })?;
                 println!("removed old version: {:?}", i.0);
             }
         }
@@ -124,7 +128,10 @@ impl Reactor {
                 #[cfg(unix)]
                 {
                     use std::os::unix::prelude::PermissionsExt;
-                    fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))?;
+                    fs::set_permissions(&new_version.1, Permissions::from_mode(0o755)).map_err(|err| Error::CommonFileError {
+                        msg: format!("failed to set permission of new version"),
+                        source: err,
+                    })?;
                 }
                 println!(
                     "found new local version: {:?}. restarting...",
@@ -135,7 +142,10 @@ impl Reactor {
         }
 
         // make self as default executable
-        let cur_path = std::env::current_exe()?;
+        let cur_path = std::env::current_exe().map_err(|err| Error::CommonFileError {
+            msg: format!("failed to locate current executable"),
+            source: err,
+        })?;
         if cur_path
             .file_name()
             .unwrap()
@@ -148,7 +158,10 @@ impl Reactor {
                 .parent()
                 .unwrap()
                 .join(utils::get_executable_file_name(&self.name)?);
-            fs::copy(&cur_path, &new_path)?;
+            fs::copy(&cur_path, &new_path).map_err(|err| Error::CommonFileError {
+                msg: format!("failed to set default executable"),
+                source: err,
+            })?;
             println!("replaced default version. restarting...");
             run_executable_and_quit(new_path);
         }
@@ -157,11 +170,17 @@ impl Reactor {
     }
 
     fn find_other_available_versions(&self) -> Result<Vec<(VersionTag, PathBuf)>, Error> {
-        let paths = fs::read_dir(".")?;
+        let paths = fs::read_dir(".").map_err(|err| Error::CommonFileError {
+            msg: format!("failed to read current directory"),
+            source: err,
+        })?;
 
         let mut result = vec![];
         for path in paths {
-            let path = path?;
+            let path = path.map_err(|err| Error::CommonFileError {
+                msg: format!("failed to read dir"),
+                source: err,
+            })?;
             let name = path.file_name();
             let name = name.to_str().unwrap();
             if name.starts_with(&self.name) {
@@ -184,9 +203,15 @@ impl Reactor {
         let temp_dir = PathBuf::from("./temp");
         utils::extract_zip("temp.zip", &temp_dir)?;
         println!("extracted remote package");
-        utils::copy(&temp_dir, ".")?;
+        utils::copy(&temp_dir, ".").map_err(|err| Error::CommonFileError {
+            msg: format!("failed to copy directories"),
+            source: err,
+        })?;
         println!("replaced old data with new data");
-        std::fs::remove_dir_all(temp_dir)?;
+        std::fs::remove_dir_all(temp_dir).map_err(|err| Error::CommonFileError {
+            msg: format!("failed to remove temp directory"),
+            source: err,
+        })?;
         println!("finish updates");
 
         Ok(())
