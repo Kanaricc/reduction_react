@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -36,7 +38,7 @@ impl PartialOrd for VersionTag{
         if self.patch!=other.patch{
             return Some(self.patch.cmp(&other.patch));
         }
-        None
+        Some(Ordering::Equal)
     }
 }
 
@@ -110,5 +112,25 @@ impl TryFrom<&str> for VersionTag{
         let minor = parts.next().unwrap().parse::<u32>()?;
         let patch = parts.next().unwrap().parse::<u32>()?;
         Ok(VersionTag::new(major, minor, patch))
+    }
+}
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    #[test]
+    fn test_cmp(){
+        let v1 = VersionTag::new(1,2,3);
+        let v2 = VersionTag::new(1,2,3);
+        let v3 = VersionTag::new(1,2,4);
+        let v4 = VersionTag::new(1,3,3);
+        let v5 = VersionTag::new(2,2,3);
+
+        assert!(v1==v2);
+        assert!(v1<=v2);
+        assert!(v1>=v2);
+        assert!(v1<v3);
+        assert!(v1<v4);
+        assert!(v1<v5);
     }
 }
