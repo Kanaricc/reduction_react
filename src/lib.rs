@@ -110,17 +110,6 @@ impl Reactor {
 
         let mut other_version = self.find_other_available_versions()?;
         other_version.sort();
-        // remove old versions
-        for i in other_version.iter() {
-            if i.0 <= self.version {
-                fs::remove_file(&i.1).map_err(|err| Error::CommonFileError {
-                    msg: format!("failed to remove old version"),
-                    source: err,
-                })?;
-                println!("removed old version: {:?}", i.0);
-            }
-        }
-
         // start latest version
         other_version.reverse();
         if let Some(new_version) = other_version.get(0) {
@@ -164,6 +153,18 @@ impl Reactor {
             })?;
             println!("replaced default version. restarting...");
             run_executable_and_quit(new_path.canonicalize().unwrap());
+        }
+
+        other_version.sort();
+        // remove old versions
+        for i in other_version.iter() {
+            if i.0 <= self.version {
+                fs::remove_file(&i.1).map_err(|err| Error::CommonFileError {
+                    msg: format!("failed to remove old version"),
+                    source: err,
+                })?;
+                println!("removed old version: {:?}", i.0);
+            }
         }
 
         Ok(())
