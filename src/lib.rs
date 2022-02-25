@@ -57,7 +57,7 @@ impl Reactor {
     ) -> Self {
         let version = version.try_into();
         if version.is_err() {
-            panic!("invalid version");
+            panic!("invalid version, please contact the author");
         }
         let version = version.unwrap_or_else(|_| VersionTag::new(0, 0, 0));
         let self_name = env::current_exe().unwrap();
@@ -65,7 +65,7 @@ impl Reactor {
         if let Some(name_version) = self_version.nth(1) {
             let name_version: VersionTag = name_version.try_into().unwrap();
             if version != name_version {
-                panic!("invalid version");
+                panic!("invalid version, please contact the author");
             }
         }
         Reactor {
@@ -75,7 +75,15 @@ impl Reactor {
         }
     }
 
-    pub fn check_update_and_update(&self) -> Result<(), Error> {
+    pub fn oneclick(&self) -> Result<(), Error> {
+        self.self_update_if_available()?;
+        self.check_update_and_update()?;
+        self.self_update_if_available()?;
+
+        Ok(())
+    }
+
+    fn check_update_and_update(&self) -> Result<(), Error> {
         let latest_version = self.check_update()?;
         if let CheckUpdateResult::UpdateAvailable(latest_version) = latest_version {
             self.update(&latest_version)?;
@@ -86,7 +94,7 @@ impl Reactor {
         Ok(())
     }
 
-    pub fn check_update(&self) -> Result<CheckUpdateResult, Error> {
+    fn check_update(&self) -> Result<CheckUpdateResult, Error> {
         let resp = reqwest::blocking::get(&self.pulishing_url)?.text()?;
         let package_tag = serde_json::from_str::<data::PackageTag>(&resp)?;
         if package_tag.version > self.version {
@@ -96,7 +104,7 @@ impl Reactor {
         }
     }
 
-    pub fn self_update_if_available(&self) -> Result<(), Error> {
+    fn self_update_if_available(&self) -> Result<(), Error> {
         thread::sleep(Duration::from_secs(1));
 
         let mut other_version = self.find_other_available_versions()?;
@@ -104,8 +112,8 @@ impl Reactor {
         // remove old versions
         for i in other_version.iter() {
             if i.0 <= self.version {
-                println!("remove old version: {:?}", i.0);
                 fs::remove_file(&i.1)?;
+                println!("removed old version: {:?}", i.0);
             }
         }
 
@@ -113,12 +121,15 @@ impl Reactor {
         other_version.reverse();
         if let Some(new_version) = other_version.get(0) {
             if new_version.0 > self.version {
-                println!("find new local version: {:?}. restarting...", new_version.0);
                 #[cfg(unix)]
                 {
                     use std::os::unix::prelude::PermissionsExt;
                     fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))?;
                 }
+                println!(
+                    "found new local version: {:?}. restarting...",
+                    new_version.0
+                );
                 run_executable_and_quit(&new_version.1);
             }
         }
@@ -133,12 +144,12 @@ impl Reactor {
             .find("-")
             .is_some()
         {
-            println!("replace default version. restarting...");
             let new_path = cur_path
                 .parent()
                 .unwrap()
                 .join(utils::get_executable_file_name(&self.name)?);
             fs::copy(&cur_path, &new_path)?;
+            println!("replaced default version. restarting...");
             run_executable_and_quit(new_path);
         }
 
@@ -172,11 +183,11 @@ impl Reactor {
         // TODO: check hash
         let temp_dir = PathBuf::from("./temp");
         utils::extract_zip("temp.zip", &temp_dir)?;
-        println!("finish extracting");
+        println!("extracted remote package");
         utils::copy(&temp_dir, ".")?;
-        println!("replaced old data");
+        println!("replaced old data with new data");
         std::fs::remove_dir_all(temp_dir)?;
-        println!("finish data update");
+        println!("finish updates");
 
         Ok(())
     }
