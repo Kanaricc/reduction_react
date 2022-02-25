@@ -1,24 +1,31 @@
 use std::{
-    fs,
+    env, fs,
     io::{self, Write},
-    path::{Path, PathBuf}, env,
+    path::{Path, PathBuf},
 };
 
 use crate::Error;
 
-pub fn get_executable_file_name(name:&str)->Result<String,Error> {
+pub fn get_executable_file_name(name: &str) -> Result<String, Error> {
     match env::consts::OS {
-        "windows" => Ok(name.to_string()+".exe"),
+        "windows" => Ok(name.to_string() + ".exe"),
         "unix" => Ok(name.into()),
-        "linux"=>Ok(name.into()),
-        _=>Err(Error::UnsupportedOS(env::consts::OS.to_string()))?,
+        "linux" => Ok(name.into()),
+        _ => Err(Error::UnsupportedOS(env::consts::OS.to_string()))?,
     }
 }
 
 pub fn download_file(url: &str, dest: impl AsRef<Path>) -> Result<(), Error> {
     let resp = reqwest::blocking::get(url)?.bytes()?;
-    let mut file = std::fs::File::create(dest.as_ref())?;
-    file.write_all(&resp)?;
+    let mut file = std::fs::File::create(dest.as_ref()).map_err(|err| Error::CommonFileError {
+        msg: format!("failed to create file"),
+        source: err,
+    })?;
+    file.write_all(&resp)
+        .map_err(|err| Error::CommonFileError {
+            msg: format!("failed to write file"),
+            source: err,
+        })?;
     Ok(())
 }
 
@@ -26,9 +33,18 @@ pub fn extract_zip(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> Result<(), 
     let src = src.as_ref();
     let dest = dest.as_ref();
     if !dest.exists() {
-        std::fs::create_dir_all(&dest)?;
+        std::fs::create_dir_all(&dest).map_err(|err| Error::CommonFileError {
+            msg: format!("failed to create directories"),
+            source: err,
+        })?;
     }
-    let mut zip = zip::ZipArchive::new(std::fs::File::open(&src)?)?;
+    let mut zip =
+        zip::ZipArchive::new(
+            std::fs::File::open(&src).map_err(|err| Error::CommonFileError {
+                msg: format!("failed to open remote file"),
+                source: err,
+            })?,
+        )?;
     for i in 0..zip.len() {
         let mut file = zip.by_index(i)?;
         if file.is_dir() {
@@ -38,10 +54,19 @@ pub fn extract_zip(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> Result<(), 
             let out_path = dest.join(relative_path);
             let out_dir = out_path.parent().unwrap();
             if !out_dir.exists() {
-                std::fs::create_dir_all(out_dir)?;
+                std::fs::create_dir_all(out_dir).map_err(|err| Error::CommonFileError {
+                    msg: format!("failed to extract directories"),
+                    source: err,
+                })?;
             }
-            let mut out_file = std::fs::File::create(&out_path)?;
-            io::copy(&mut file, &mut out_file)?;
+            let mut out_file = std::fs::File::create(&out_path).map_err(|err| Error::CommonFileError {
+                msg: format!("failed to create extracted file slot"),
+                source: err,
+            })?;
+            io::copy(&mut file, &mut out_file).map_err(|err| Error::CommonFileError {
+                msg: format!("failed to extract file"),
+                source: err,
+            })?;
             println!("unzipped {}", out_path.display());
         }
     }
