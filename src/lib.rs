@@ -1,8 +1,8 @@
 use std::{
     env,
     fs::{self, Permissions},
-    os::unix::prelude::PermissionsExt,
-    path::PathBuf,
+    os::{unix::prelude::{PermissionsExt, CommandExt}},
+    path::{PathBuf, Path}, thread, time::Duration,
 };
 
 use data::{PackageTag, VersionTag};
@@ -96,6 +96,8 @@ impl Reactor {
     }
 
     pub fn self_update_if_available(&self) -> Result<(), Error> {
+        thread::sleep(Duration::from_secs(1));
+
         let mut other_version = self.find_other_available_versions()?;
         other_version.sort();
         // remove old versions
@@ -112,8 +114,7 @@ impl Reactor {
             if new_version.0 > self.version {
                 println!("find new local version: {:?}. restarting...", new_version.0);
                 fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))?;
-                std::process::Command::new(&new_version.1).spawn().unwrap();
-                std::process::exit(0);
+                run_executable_and_quit(&new_version.1);
             }
         }
 
@@ -133,8 +134,7 @@ impl Reactor {
                 .unwrap()
                 .join(utils::get_executable_file_name(&self.name)?);
             fs::copy(&cur_path, &new_path)?;
-            std::process::Command::new(new_path).spawn().unwrap();
-            std::process::exit(0);
+            run_executable_and_quit(new_path);
         }
 
         Ok(())
@@ -177,8 +177,21 @@ impl Reactor {
     }
 }
 
-fn run_executable(){
-    
+fn run_executable_and_quit(path: impl AsRef<Path>){
+    match env::consts::OS{
+        "windows" => {
+            std::process::Command::new("cmd")
+            .arg("/C")
+            .arg(path.as_ref().to_str().unwrap()).spawn().unwrap();
+            std::process::exit(0);
+        }
+        "unix"|"linux" => {
+            std::process::Command::new(path.as_ref().to_str().unwrap()).exec();
+        },
+        _=>{
+            panic!("unsupported os");
+        }
+    }
 }
 
 #[cfg(test)]
