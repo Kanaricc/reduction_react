@@ -137,7 +137,7 @@ impl Reactor {
                     "found new local version: {:?}. restarting...",
                     new_version.0
                 );
-                run_executable_and_quit(&new_version.1);
+                run_executable_and_quit(new_version.1.canonicalize().unwrap());
             }
         }
 
@@ -163,7 +163,7 @@ impl Reactor {
                 source: err,
             })?;
             println!("replaced default version. restarting...");
-            run_executable_and_quit(new_path);
+            run_executable_and_quit(new_path.canonicalize().unwrap());
         }
 
         Ok(())
@@ -228,8 +228,10 @@ fn run_executable_and_quit(path: impl AsRef<Path>) {
 fn run_executable_and_quit(path: impl AsRef<Path>) {
     std::process::Command::new("cmd")
         .arg("/C")
+        .arg("start")
+        .arg("")
         .arg(path.as_ref().to_str().unwrap())
-        .spawn()
+        .output()
         .unwrap();
     std::process::exit(0);
 }
