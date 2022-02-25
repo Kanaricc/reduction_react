@@ -1,8 +1,9 @@
 use std::{
     env,
     fs::{self, Permissions},
-    os::{unix::prelude::{PermissionsExt, CommandExt}},
-    path::{PathBuf, Path}, thread, time::Duration,
+    path::{Path, PathBuf},
+    thread,
+    time::Duration,
 };
 
 use data::{PackageTag, VersionTag};
@@ -113,7 +114,11 @@ impl Reactor {
         if let Some(new_version) = other_version.get(0) {
             if new_version.0 > self.version {
                 println!("find new local version: {:?}. restarting...", new_version.0);
-                fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::prelude::PermissionsExt;
+                    fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))?;
+                }
                 run_executable_and_quit(&new_version.1);
             }
         }
@@ -177,21 +182,20 @@ impl Reactor {
     }
 }
 
-fn run_executable_and_quit(path: impl AsRef<Path>){
-    match env::consts::OS{
-        "windows" => {
-            std::process::Command::new("cmd")
-            .arg("/C")
-            .arg(path.as_ref().to_str().unwrap()).spawn().unwrap();
-            std::process::exit(0);
-        }
-        "unix"|"linux" => {
-            std::process::Command::new(path.as_ref().to_str().unwrap()).exec();
-        },
-        _=>{
-            panic!("unsupported os");
-        }
-    }
+#[cfg(unix)]
+fn run_executable_and_quit(path: impl AsRef<Path>) {
+    use std::os::unix::prelude::CommandExt;
+    std::process::Command::new(path.as_ref().to_str().unwrap()).exec();
+}
+
+#[cfg(windows)]
+fn run_executable_and_quit(path: impl AsRef<Path>) {
+    std::process::Command::new("cmd")
+        .arg("/C")
+        .arg(path.as_ref().to_str().unwrap())
+        .spawn()
+        .unwrap();
+    std::process::exit(0);
 }
 
 #[cfg(test)]
