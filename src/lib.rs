@@ -89,9 +89,11 @@ impl Reactor {
     }
 
     pub fn oneclick(&self) -> Result<(), Error> {
+        info!("starting checking update");
         self.self_update_if_available()?;
         self.check_update_and_update()?;
         self.self_update_if_available()?;
+        info!("finshed checking update");
 
         Ok(())
     }
