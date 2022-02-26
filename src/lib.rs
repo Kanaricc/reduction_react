@@ -211,6 +211,10 @@ impl Reactor {
             message: format!("failed to remove temp directory `temp`"),
             source: err,
         })?;
+        std::fs::remove_file("temp.zip").map_err(|err| Error::CommonFileError {
+            message: format!("failed to remove temp file `temp.zip`"),
+            source: err,
+        })?;
         println!("finish updates");
 
         Ok(())
