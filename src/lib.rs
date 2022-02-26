@@ -16,12 +16,16 @@ mod utils;
 pub enum Error {
     #[error("this os `{0}` is not supported")]
     UnsupportedOS(String),
-    #[error("failed to execute IO operation: {msg}")]
+    #[error("failed to execute IO operation")]
     CommonFileError {
-        msg: String,
+        message: String,
         #[source]
         source: std::io::Error,
     },
+    #[error("failed to set permission")]
+    PermissionError(#[source] std::io::Error),
+    #[error("failed to locate path of current executable")]
+    SelfLocationError(#[source] std::io::Error),
     #[error("failed to fetch data from the publisher")]
     NetError {
         #[from]
@@ -117,10 +121,7 @@ impl Reactor {
                 #[cfg(unix)]
                 {
                     use std::os::unix::prelude::PermissionsExt;
-                    fs::set_permissions(&new_version.1, Permissions::from_mode(0o755)).map_err(|err| Error::CommonFileError {
-                        msg: format!("failed to set permission of new version"),
-                        source: err,
-                    })?;
+                    fs::set_permissions(&new_version.1, Permissions::from_mode(0o755)).map_err(|err| Error::PermissionError(err))?;
                 }
                 println!(
                     "found new local version: {:?}. restarting...",
@@ -131,10 +132,7 @@ impl Reactor {
         }
 
         // make self as default executable
-        let cur_path = std::env::current_exe().map_err(|err| Error::CommonFileError {
-            msg: format!("failed to locate current executable"),
-            source: err,
-        })?;
+        let cur_path = std::env::current_exe().map_err(|err| Error::SelfLocationError(err))?;
         if cur_path
             .file_name()
             .unwrap()
@@ -148,7 +146,7 @@ impl Reactor {
                 .unwrap()
                 .join(utils::get_executable_file_name(&self.name)?);
             fs::copy(&cur_path, &new_path).map_err(|err| Error::CommonFileError {
-                msg: format!("failed to set default executable"),
+                message: format!("failed to set current version as default executable"),
                 source: err,
             })?;
             println!("replaced default version. restarting...");
@@ -160,7 +158,7 @@ impl Reactor {
         for i in other_version.iter() {
             if i.0 <= self.version {
                 fs::remove_file(&i.1).map_err(|err| Error::CommonFileError {
-                    msg: format!("failed to remove old version"),
+                    message: format!("failed to remove old version `{:?}`",&i.1),
                     source: err,
                 })?;
                 println!("removed old version: {:?}", i.0);
@@ -172,14 +170,14 @@ impl Reactor {
 
     fn find_other_available_versions(&self) -> Result<Vec<(VersionTag, PathBuf)>, Error> {
         let paths = fs::read_dir(".").map_err(|err| Error::CommonFileError {
-            msg: format!("failed to read current directory"),
+            message: format!("failed to read current directory"),
             source: err,
         })?;
 
         let mut result = vec![];
         for path in paths {
             let path = path.map_err(|err| Error::CommonFileError {
-                msg: format!("failed to read dir"),
+                message: format!("failed to read dir"),
                 source: err,
             })?;
             let name = path.file_name();
@@ -205,12 +203,12 @@ impl Reactor {
         utils::extract_zip("temp.zip", &temp_dir)?;
         println!("extracted remote package");
         utils::copy(&temp_dir, ".").map_err(|err| Error::CommonFileError {
-            msg: format!("failed to copy directories"),
+            message: format!("failed to copy directories `{:?}`",&temp_dir),
             source: err,
         })?;
         println!("replaced old data with new data");
         std::fs::remove_dir_all(temp_dir).map_err(|err| Error::CommonFileError {
-            msg: format!("failed to remove temp directory"),
+            message: format!("failed to remove temp directory `temp`"),
             source: err,
         })?;
         println!("finish updates");
