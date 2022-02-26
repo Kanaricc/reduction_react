@@ -109,7 +109,7 @@ impl Reactor {
         Ok(())
     }
 
-    fn check_update(&self) -> Result<CheckUpdateResult, Error> {
+    pub fn check_update(&self) -> Result<CheckUpdateResult, Error> {
         let resp = reqwest::blocking::get(&self.pulishing_url)?.text()?;
         let package_tag = serde_json::from_str::<data::PackageTag>(&resp)?;
         if package_tag.version > self.version {
