@@ -1,9 +1,10 @@
 use std::{
     env, fs,
-    io::{self, Write},
-    path::{Path, PathBuf},
+    io::{self, Write, BufRead},
+    path::{Path, PathBuf}, cmp::min,
 };
 
+use indicatif::ProgressBar;
 use log::trace;
 
 use crate::Error;
@@ -18,16 +19,61 @@ pub fn get_executable_file_name(name: &str) -> Result<String, Error> {
 }
 
 pub fn download_file(url: &str, dest: impl AsRef<Path>) -> Result<(), Error> {
-    let resp = reqwest::blocking::get(url)?.bytes()?;
+    trace!("start downloading file from `{}` to `{:?}`", url,dest.as_ref());
+    // let resp = reqwest::blocking::get(url)?.bytes()?;
+    // let mut file = std::fs::File::create(dest.as_ref()).map_err(|err| Error::CommonFileError {
+    //     message: format!("failed to create file `{:?}`", dest.as_ref()),
+    //     source: err,
+    // })?;
+    // file.write_all(&resp)
+    //     .map_err(|err| Error::CommonFileError {
+    //         message: format!("failed to write file `{:?}`", dest.as_ref()),
+    //         source: err,
+    //     })?;
+
+    let resp = reqwest::blocking::Client::new().get(url).send()?;
+    let size = resp
+        .headers()
+        .get(reqwest::header::CONTENT_LENGTH)
+        .map(|val| {
+            val.to_str()
+                .map(|s| s.parse::<u64>().unwrap_or(0))
+                .unwrap_or(0)
+        })
+        .unwrap_or(0);
+    if !resp.status().is_success() {
+        return Err(Error::NetError(format!(
+            "request failed with status: {:?}",
+            resp.status()
+        )));
+    }
+    let mut src=io::BufReader::new(resp);
+    let mut downloaded=0;
+    let bar={
+        let pb=ProgressBar::new(size);
+        pb
+    };
+
     let mut file = std::fs::File::create(dest.as_ref()).map_err(|err| Error::CommonFileError {
-        message: format!("failed to create file `{:?}`", dest.as_ref()),
-        source: err,
-    })?;
-    file.write_all(&resp)
-        .map_err(|err| Error::CommonFileError {
-            message: format!("failed to write file `{:?}`", dest.as_ref()),
+            message: format!("failed to create file `{:?}`", dest.as_ref()),
             source: err,
         })?;
+
+    loop{
+        let n={
+            let buf=src.fill_buf()?;
+            file.write_all(&buf)?;
+            buf.len()
+        };
+        if n==0{
+            break;
+        }
+        src.consume(n);
+        downloaded=min(downloaded+n as u64,size);
+        bar.set_position(downloaded);
+    }
+    bar.finish_with_message("finish downloading");
+
     Ok(())
 }
 
@@ -122,4 +168,16 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
     }
 
     Ok(())
+}
+
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    #[test]
+    fn test_download_file(){
+        let url="https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png";
+        let dest=PathBuf::from("/tmp/googlelogo.png");
+        download_file(url,&dest).unwrap();
+    }
 }

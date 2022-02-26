@@ -18,6 +18,11 @@ pub enum Error {
     #[error("this os `{0}` is not supported")]
     UnsupportedOS(String),
     #[error("failed to execute IO operation")]
+    UntrackedFileError{
+        #[from]
+        source:std::io::Error,
+    },
+    #[error("failed to execute IO operation: {message}")]
     CommonFileError {
         message: String,
         #[source]
@@ -27,11 +32,13 @@ pub enum Error {
     PermissionError(#[source] std::io::Error),
     #[error("failed to locate path of current executable")]
     SelfLocationError(#[source] std::io::Error),
-    #[error("failed to fetch data from the publisher")]
-    NetError {
+    #[error("error when fetching data from the publisher")]
+    UntrackedNetError {
         #[from]
         source: reqwest::Error,
     },
+    #[error("failed to fetch data from the publisher: {0}")]
+    NetError(String),
     #[error("failed to parse data from the publisher")]
     ParsingError {
         #[from]
@@ -119,7 +126,7 @@ impl Reactor {
         other_version.reverse();
         if let Some(new_version) = other_version.get(0) {
             if new_version.0 > self.version {
-                #[cfg(unix)]
+                #[cfg(not(windows))]
                 {
                     use std::os::unix::prelude::PermissionsExt;
                     fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))
