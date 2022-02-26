@@ -4,6 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use log::trace;
+
 use crate::Error;
 
 pub fn get_executable_file_name(name: &str) -> Result<String, Error> {
@@ -18,12 +20,12 @@ pub fn get_executable_file_name(name: &str) -> Result<String, Error> {
 pub fn download_file(url: &str, dest: impl AsRef<Path>) -> Result<(), Error> {
     let resp = reqwest::blocking::get(url)?.bytes()?;
     let mut file = std::fs::File::create(dest.as_ref()).map_err(|err| Error::CommonFileError {
-        message: format!("failed to create file `{:?}`",dest.as_ref()),
+        message: format!("failed to create file `{:?}`", dest.as_ref()),
         source: err,
     })?;
     file.write_all(&resp)
         .map_err(|err| Error::CommonFileError {
-            message: format!("failed to write file `{:?}`",dest.as_ref()),
+            message: format!("failed to write file `{:?}`", dest.as_ref()),
             source: err,
         })?;
     Ok(())
@@ -34,14 +36,14 @@ pub fn extract_zip(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> Result<(), 
     let dest = dest.as_ref();
     if !dest.exists() {
         std::fs::create_dir_all(&dest).map_err(|err| Error::CommonFileError {
-            message: format!("failed to create directories `{:?}`",&dest),
+            message: format!("failed to create directories `{:?}`", &dest),
             source: err,
         })?;
     }
     let mut zip =
         zip::ZipArchive::new(
             std::fs::File::open(&src).map_err(|err| Error::CommonFileError {
-                message: format!("failed to open downloaded file `{:?}`",&src),
+                message: format!("failed to open downloaded file `{:?}`", &src),
                 source: err,
             })?,
         )?;
@@ -55,19 +57,20 @@ pub fn extract_zip(src: impl AsRef<Path>, dest: impl AsRef<Path>) -> Result<(), 
             let out_dir = out_path.parent().unwrap();
             if !out_dir.exists() {
                 std::fs::create_dir_all(out_dir).map_err(|err| Error::CommonFileError {
-                    message: format!("failed to extract directories `{:?}`",&out_dir),
+                    message: format!("failed to extract directories `{:?}`", &out_dir),
                     source: err,
                 })?;
             }
-            let mut out_file = std::fs::File::create(&out_path).map_err(|err| Error::CommonFileError {
-                message: format!("failed to create extracted file slot `{:?}`",&out_path),
-                source: err,
-            })?;
+            let mut out_file =
+                std::fs::File::create(&out_path).map_err(|err| Error::CommonFileError {
+                    message: format!("failed to create extracted file slot `{:?}`", &out_path),
+                    source: err,
+                })?;
             io::copy(&mut file, &mut out_file).map_err(|err| Error::CommonFileError {
-                message: format!("failed to extract file `{:?}`",&out_file),
+                message: format!("failed to extract file `{:?}`", &out_file),
                 source: err,
             })?;
-            println!("unzipped {}", out_path.display());
+            trace!("unzipped {}", out_path.display());
         }
     }
 
@@ -82,7 +85,7 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
     let input_root = PathBuf::from(from.as_ref()).components().count();
 
     while let Some(working_path) = stack.pop() {
-        println!("process: {:?}", &working_path);
+        trace!("process: {:?}", &working_path);
 
         // Generate a relative path
         let src: PathBuf = working_path.components().skip(input_root).collect();
@@ -94,7 +97,7 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
             output_root.join(&src)
         };
         if fs::metadata(&dest).is_err() {
-            println!(" mkdir: {:?}", dest);
+            trace!(" mkdir: {:?}", dest);
             fs::create_dir_all(&dest)?;
         }
 
@@ -107,11 +110,11 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
                 match path.file_name() {
                     Some(filename) => {
                         let dest_path = dest.join(filename);
-                        println!("  copy: {:?} -> {:?}", &path, &dest_path);
+                        trace!("  copy: {:?} -> {:?}", &path, &dest_path);
                         fs::copy(&path, &dest_path)?;
                     }
                     None => {
-                        println!("failed: {:?}", path);
+                        trace!("failed: {:?}", path);
                     }
                 }
             }

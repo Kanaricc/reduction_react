@@ -7,6 +7,7 @@ use std::{
 };
 
 use data::{PackageTag, VersionTag};
+use log::{info, warn};
 use thiserror::Error;
 
 mod data;
@@ -93,7 +94,7 @@ impl Reactor {
         if let CheckUpdateResult::UpdateAvailable(latest_version) = latest_version {
             self.update(&latest_version)?;
         } else {
-            println!("{} is up to date", self.name);
+            info!("{} is up to date", self.name);
         }
 
         Ok(())
@@ -121,9 +122,10 @@ impl Reactor {
                 #[cfg(unix)]
                 {
                     use std::os::unix::prelude::PermissionsExt;
-                    fs::set_permissions(&new_version.1, Permissions::from_mode(0o755)).map_err(|err| Error::PermissionError(err))?;
+                    fs::set_permissions(&new_version.1, Permissions::from_mode(0o755))
+                        .map_err(|err| Error::PermissionError(err))?;
                 }
-                println!(
+                warn!(
                     "found new local version: {:?}. restarting...",
                     new_version.0
                 );
@@ -149,7 +151,7 @@ impl Reactor {
                 message: format!("failed to set current version as default executable"),
                 source: err,
             })?;
-            println!("replaced default version. restarting...");
+            warn!("replaced default version. restarting...");
             run_executable_and_quit(new_path.canonicalize().unwrap());
         }
 
@@ -158,10 +160,10 @@ impl Reactor {
         for i in other_version.iter() {
             if i.0 <= self.version {
                 fs::remove_file(&i.1).map_err(|err| Error::CommonFileError {
-                    message: format!("failed to remove old version `{:?}`",&i.1),
+                    message: format!("failed to remove old version `{:?}`", &i.1),
                     source: err,
                 })?;
-                println!("removed old version: {:?}", i.0);
+                info!("removed old version: {:?}", i.0);
             }
         }
 
@@ -201,12 +203,12 @@ impl Reactor {
         // TODO: check hash
         let temp_dir = PathBuf::from("./temp");
         utils::extract_zip("temp.zip", &temp_dir)?;
-        println!("extracted remote package");
+        info!("extracted remote package");
         utils::copy(&temp_dir, ".").map_err(|err| Error::CommonFileError {
-            message: format!("failed to copy directories `{:?}`",&temp_dir),
+            message: format!("failed to copy directories `{:?}`", &temp_dir),
             source: err,
         })?;
-        println!("replaced old data with new data");
+        info!("replaced old data with new data");
         std::fs::remove_dir_all(temp_dir).map_err(|err| Error::CommonFileError {
             message: format!("failed to remove temp directory `temp`"),
             source: err,
@@ -215,7 +217,7 @@ impl Reactor {
             message: format!("failed to remove temp file `temp.zip`"),
             source: err,
         })?;
-        println!("finish updates");
+        info!("finish file updates");
 
         Ok(())
     }
