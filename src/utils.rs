@@ -1,7 +1,8 @@
 use std::{
+    cmp::min,
     env, fs,
-    io::{self, Write, BufRead},
-    path::{Path, PathBuf}, cmp::min,
+    io::{self, BufRead, Write},
+    path::{Path, PathBuf},
 };
 
 use indicatif::ProgressBar;
@@ -19,7 +20,11 @@ pub fn get_executable_file_name(name: &str) -> Result<String, Error> {
 }
 
 pub fn download_file(url: &str, dest: impl AsRef<Path>) -> Result<(), Error> {
-    trace!("start downloading file from `{}` to `{:?}`", url,dest.as_ref());
+    trace!(
+        "start downloading file from `{}` to `{:?}`",
+        url,
+        dest.as_ref()
+    );
     // let resp = reqwest::blocking::get(url)?.bytes()?;
     // let mut file = std::fs::File::create(dest.as_ref()).map_err(|err| Error::CommonFileError {
     //     message: format!("failed to create file `{:?}`", dest.as_ref()),
@@ -47,29 +52,29 @@ pub fn download_file(url: &str, dest: impl AsRef<Path>) -> Result<(), Error> {
             resp.status()
         )));
     }
-    let mut src=io::BufReader::new(resp);
-    let mut downloaded=0;
-    let bar={
-        let pb=ProgressBar::new(size);
+    let mut src = io::BufReader::new(resp);
+    let mut downloaded = 0;
+    let bar = {
+        let pb = ProgressBar::new(size);
         pb
     };
 
     let mut file = std::fs::File::create(dest.as_ref()).map_err(|err| Error::CommonFileError {
-            message: format!("failed to create file `{:?}`", dest.as_ref()),
-            source: err,
-        })?;
+        message: format!("failed to create file `{:?}`", dest.as_ref()),
+        source: err,
+    })?;
 
-    loop{
-        let n={
-            let buf=src.fill_buf()?;
+    loop {
+        let n = {
+            let buf = src.fill_buf()?;
             file.write_all(&buf)?;
             buf.len()
         };
-        if n==0{
+        if n == 0 {
             break;
         }
         src.consume(n);
-        downloaded=min(downloaded+n as u64,size);
+        downloaded = min(downloaded + n as u64, size);
         bar.set_position(downloaded);
     }
     bar.finish_with_message("finish downloading");
@@ -170,14 +175,35 @@ pub fn copy<U: AsRef<Path>, V: AsRef<Path>>(from: U, to: V) -> Result<(), std::i
     Ok(())
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TargetInformation<'t> {
+    arch: &'t str,
+    os: &'t str,
+}
+
+pub fn get_target_info() -> TargetInformation<'static> {
+    let target = TargetInformation {
+        arch: std::env::consts::ARCH,
+        os: std::env::consts::OS,
+    };
+
+    target
+}
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
     #[test]
-    fn test_download_file(){
-        let url="https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png";
-        let dest=PathBuf::from("/tmp/googlelogo.png");
-        download_file(url,&dest).unwrap();
+    fn test_download_file() {
+        let url =
+            "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png";
+        let dest = PathBuf::from("/tmp/googlelogo.png");
+        download_file(url, &dest).unwrap();
+    }
+    #[test]
+    fn test_target_info() {
+        let target = get_target_info();
+
+        println!("{:?}", target);
     }
 }

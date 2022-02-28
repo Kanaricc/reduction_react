@@ -18,9 +18,9 @@ pub enum Error {
     #[error("this os `{0}` is not supported")]
     UnsupportedOS(String),
     #[error("failed to execute IO operation")]
-    UntrackedFileError{
+    UntrackedFileError {
         #[from]
-        source:std::io::Error,
+        source: std::io::Error,
     },
     #[error("failed to execute IO operation: {message}")]
     CommonFileError {

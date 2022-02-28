@@ -1,18 +1,18 @@
 use std::cmp::Ordering;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-pub struct PackageTag{
-    pub version:VersionTag,
+pub struct PackageTag {
+    pub version: VersionTag,
     pub hash: String,
     #[serde(rename = "downloadUrl")]
     pub download_url: String,
 }
 
-impl PackageTag{
-    pub fn new(version: VersionTag, hash: String, download_url: String) -> Self{
-        PackageTag{
+impl PackageTag {
+    pub fn new(version: VersionTag, hash: String, download_url: String) -> Self {
+        PackageTag {
             version,
             hash,
             download_url,
@@ -20,29 +20,29 @@ impl PackageTag{
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq,Eq)]
-pub struct VersionTag{
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub struct VersionTag {
     major: u32,
     minor: u32,
     patch: u32,
 }
 
-impl PartialOrd for VersionTag{
+impl PartialOrd for VersionTag {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        if self.major!=other.major{
+        if self.major != other.major {
             return Some(self.major.cmp(&other.major));
         }
-        if self.minor!=other.minor{
+        if self.minor != other.minor {
             return Some(self.minor.cmp(&other.minor));
         }
-        if self.patch!=other.patch{
+        if self.patch != other.patch {
             return Some(self.patch.cmp(&other.patch));
         }
         Some(Ordering::Equal)
     }
 }
 
-impl Ord for VersionTag{
+impl Ord for VersionTag {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.partial_cmp(other).unwrap()
     }
@@ -76,22 +76,22 @@ impl Ord for VersionTag{
     }
 }
 
-impl VersionTag{
-    pub fn new(major: u32, minor: u32, patch: u32) -> Self{
-        VersionTag{
+impl VersionTag {
+    pub fn new(major: u32, minor: u32, patch: u32) -> Self {
+        VersionTag {
             major,
             minor,
             patch,
         }
     }
 
-    pub fn as_string(&self)->String{
-        format!("{}.{}.{}",self.major,self.minor,self.patch)
+    pub fn as_string(&self) -> String {
+        format!("{}.{}.{}", self.major, self.minor, self.patch)
     }
 }
 
-impl From<String> for VersionTag{
-    fn from(s: String) -> Self{
+impl From<String> for VersionTag {
+    fn from(s: String) -> Self {
         let mut parts = s.split(".");
         let major = parts.next().unwrap().parse::<u32>().unwrap();
         let minor = parts.next().unwrap().parse::<u32>().unwrap();
@@ -100,12 +100,12 @@ impl From<String> for VersionTag{
     }
 }
 
-impl TryFrom<&str> for VersionTag{
+impl TryFrom<&str> for VersionTag {
     type Error = std::num::ParseIntError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut parts = value.split(".");
-        if parts.clone().count()<3{
+        if parts.clone().count() < 3 {
             "3q".parse::<u32>()?;
         }
         let major = parts.next().unwrap().parse::<u32>()?;
@@ -116,21 +116,21 @@ impl TryFrom<&str> for VersionTag{
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
     #[test]
-    fn test_cmp(){
-        let v1 = VersionTag::new(1,2,3);
-        let v2 = VersionTag::new(1,2,3);
-        let v3 = VersionTag::new(1,2,4);
-        let v4 = VersionTag::new(1,3,3);
-        let v5 = VersionTag::new(2,2,3);
+    fn test_cmp() {
+        let v1 = VersionTag::new(1, 2, 3);
+        let v2 = VersionTag::new(1, 2, 3);
+        let v3 = VersionTag::new(1, 2, 4);
+        let v4 = VersionTag::new(1, 3, 3);
+        let v5 = VersionTag::new(2, 2, 3);
 
-        assert!(v1==v2);
-        assert!(v1<=v2);
-        assert!(v1>=v2);
-        assert!(v1<v3);
-        assert!(v1<v4);
-        assert!(v1<v5);
+        assert!(v1 == v2);
+        assert!(v1 <= v2);
+        assert!(v1 >= v2);
+        assert!(v1 < v3);
+        assert!(v1 < v4);
+        assert!(v1 < v5);
     }
 }
