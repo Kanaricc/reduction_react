@@ -42,7 +42,7 @@ pub enum Error {
     #[error("failed to parse data from the publisher")]
     ParsingError {
         #[from]
-        source: serde_json::Error,
+        source: serde_yaml::Error,
     },
     #[error("failed to extract data")]
     ZipError {
@@ -111,7 +111,7 @@ impl Reactor {
 
     pub fn check_update(&self) -> Result<CheckUpdateResult, Error> {
         let resp = reqwest::blocking::get(&self.pulishing_url)?.text()?;
-        let package_tag = serde_json::from_str::<data::PackageTag>(&resp)?;
+        let package_tag = serde_yaml::from_str::<data::PackageTag>(&resp)?;
         if package_tag.version > self.version {
             return Ok(CheckUpdateResult::UpdateAvailable(package_tag));
         } else {
