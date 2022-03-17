@@ -6,10 +6,12 @@ use std::{
     time::Duration,
 };
 
+use checker::{CheckUpdateResult, UpdateChecker};
 use data::{PackageTag, VersionTag};
 use log::{info, warn};
 use thiserror::Error;
 
+pub mod checker;
 mod data;
 mod utils;
 
@@ -17,6 +19,8 @@ mod utils;
 pub enum Error {
     #[error("this os `{0}` is not supported")]
     UnsupportedOS(String),
+    #[error("invalid local vesion")]
+    InvalidLocalVersionError,
     #[error("failed to execute IO operation")]
     UntrackedFileError {
         #[from]
@@ -51,26 +55,71 @@ pub enum Error {
     },
 }
 
+#[derive(Debug)]
+pub struct ReactorBuilder {
+    _name: Option<String>,
+    _version: Option<data::VersionTag>,
+    _publishing_url: Option<String>,
+}
+
+impl Default for ReactorBuilder {
+    fn default() -> Self {
+        Self {
+            _name: Default::default(),
+            _version: Default::default(),
+            _publishing_url: Default::default(),
+        }
+    }
+}
+
+impl ReactorBuilder {
+    pub fn new() -> Self {
+        Self {
+            ..Default::default()
+        }
+    }
+
+    pub fn name(mut self, name: impl Into<String>)->Self {
+        self._name = Some(name.into());
+        self
+    }
+    pub fn version(mut self, version: impl TryInto<VersionTag>)->Self {
+        let version=version.try_into();
+        match version{
+            Ok(version) => self._version = Some(version),
+            Err(_) => Err(Error::InvalidLocalVersionError).unwrap(),
+        }
+        self
+    }
+    pub fn publishing_url(mut self, publishing_url: impl Into<String>)-> Self {
+        self._publishing_url = Some(publishing_url.into());
+        self
+    }
+
+    pub fn finish(self) -> Reactor {
+        Reactor::new(
+            self._name.unwrap(),
+            self._version.unwrap(),
+            self._publishing_url.unwrap(),
+        )
+    }
+}
+
 pub struct Reactor {
     name: String,
     version: data::VersionTag,
     pulishing_url: String,
 }
 
-pub enum CheckUpdateResult {
-    UpToDate,
-    UpdateAvailable(data::PackageTag),
-}
-
 impl Reactor {
-    pub fn new(
+    fn new(
         name: impl Into<String>,
         version: impl TryInto<VersionTag>,
         pulishing_url: impl Into<String>,
     ) -> Self {
         let version = version.try_into();
         if version.is_err() {
-            panic!("invalid version, please contact the author");
+            panic!("invalid version");
         }
         let version = version.unwrap_or_else(|_| VersionTag::new(0, 0, 0));
         let self_name = env::current_exe().unwrap();
@@ -78,7 +127,7 @@ impl Reactor {
         if let Some(name_version) = self_version.nth(1) {
             let name_version: VersionTag = name_version.try_into().unwrap();
             if version != name_version {
-                panic!("invalid version, please contact the author");
+                panic!("invalid version");
             }
         }
         Reactor {
@@ -99,7 +148,8 @@ impl Reactor {
     }
 
     fn check_update_and_update(&self) -> Result<(), Error> {
-        let latest_version = self.check_update()?;
+        let checker = UpdateChecker::new(self.version, &self.pulishing_url);
+        let latest_version = checker.check_update()?;
         if let CheckUpdateResult::UpdateAvailable(latest_version) = latest_version {
             self.update(&latest_version)?;
         } else {
@@ -107,16 +157,6 @@ impl Reactor {
         }
 
         Ok(())
-    }
-
-    pub fn check_update(&self) -> Result<CheckUpdateResult, Error> {
-        let resp = reqwest::blocking::get(&self.pulishing_url)?.text()?;
-        let package_tag = serde_yaml::from_str::<data::PackageTag>(&resp)?;
-        if package_tag.version > self.version {
-            return Ok(CheckUpdateResult::UpdateAvailable(package_tag));
-        } else {
-            return Ok(CheckUpdateResult::UpToDate);
-        }
     }
 
     fn self_update_if_available(&self) -> Result<(), Error> {

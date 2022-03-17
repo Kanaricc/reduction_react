@@ -2,6 +2,8 @@ use std::cmp::Ordering;
 
 use serde::{Deserialize, Serialize};
 
+use crate::Error;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct PackageTag {
     pub version: VersionTag,
@@ -20,7 +22,7 @@ impl PackageTag {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 pub struct VersionTag {
     major: u32,
     minor: u32,
@@ -90,30 +92,21 @@ impl VersionTag {
     }
 }
 
-impl From<String> for VersionTag {
-    fn from(s: String) -> Self {
-        let mut parts = s.split(".");
-        let major = parts.next().unwrap().parse::<u32>().unwrap();
-        let minor = parts.next().unwrap().parse::<u32>().unwrap();
-        let patch = parts.next().unwrap().parse::<u32>().unwrap();
-        VersionTag::new(major, minor, patch)
-    }
-}
-
 impl TryFrom<&str> for VersionTag {
-    type Error = std::num::ParseIntError;
+    type Error = Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let mut parts = value.split(".");
         if parts.clone().count() < 3 {
-            "3q".parse::<u32>()?;
+            return Err(Error::InvalidLocalVersionError);
         }
-        let major = parts.next().unwrap().parse::<u32>()?;
-        let minor = parts.next().unwrap().parse::<u32>()?;
-        let patch = parts.next().unwrap().parse::<u32>()?;
+        let major = parts.next().unwrap().parse::<u32>().map_err(|_| Error::InvalidLocalVersionError)?;
+        let minor = parts.next().unwrap().parse::<u32>().map_err(|_| Error::InvalidLocalVersionError)?;
+        let patch = parts.next().unwrap().parse::<u32>().map_err(|_| Error::InvalidLocalVersionError)?;
         Ok(VersionTag::new(major, minor, patch))
     }
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -132,5 +125,10 @@ mod tests {
         assert!(v1 < v3);
         assert!(v1 < v4);
         assert!(v1 < v5);
+    }
+#[test]
+    fn test_dump(){
+        let package_tag=PackageTag::new("1.2.3".try_into().unwrap(), "114514".to_string(), "1919810".to_string());
+        println!("{}",serde_yaml::to_string(&package_tag).unwrap());
     }
 }

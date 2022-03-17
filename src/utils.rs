@@ -181,15 +181,6 @@ pub struct TargetInformation<'t> {
     os: &'t str,
 }
 
-pub fn get_target_info() -> TargetInformation<'static> {
-    let target = TargetInformation {
-        arch: std::env::consts::ARCH,
-        os: std::env::consts::OS,
-    };
-
-    target
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,11 +190,5 @@ mod tests {
             "https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png";
         let dest = PathBuf::from("/tmp/googlelogo.png");
         download_file(url, &dest).unwrap();
-    }
-    #[test]
-    fn test_target_info() {
-        let target = get_target_info();
-
-        println!("{:?}", target);
     }
 }
