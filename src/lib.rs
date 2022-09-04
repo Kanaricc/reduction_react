@@ -79,19 +79,19 @@ impl ReactorBuilder {
         }
     }
 
-    pub fn name(mut self, name: impl Into<String>)->Self {
+    pub fn name(mut self, name: impl Into<String>) -> Self {
         self._name = Some(name.into());
         self
     }
-    pub fn version(mut self, version: impl TryInto<VersionTag>)->Self {
-        let version=version.try_into();
-        match version{
+    pub fn version(mut self, version: impl TryInto<VersionTag>) -> Self {
+        let version = version.try_into();
+        match version {
             Ok(version) => self._version = Some(version),
             Err(_) => Err(Error::InvalidLocalVersionError).unwrap(),
         }
         self
     }
-    pub fn publishing_url(mut self, publishing_url: impl Into<String>)-> Self {
+    pub fn publishing_url(mut self, publishing_url: impl Into<String>) -> Self {
         self._publishing_url = Some(publishing_url.into());
         self
     }
@@ -251,6 +251,12 @@ impl Reactor {
         utils::download_file(&package_tag.download_url, "temp.zip")?;
         // TODO: check hash
         let temp_dir = PathBuf::from("./temp");
+        if temp_dir.exists() {
+            std::fs::remove_dir_all(&temp_dir).map_err(|err| Error::CommonFileError {
+                message: format!("failed to clear temp directory `temp`"),
+                source: err,
+            })?;
+        }
         utils::extract_zip("temp.zip", &temp_dir)?;
         info!("extracted remote package");
         utils::copy(&temp_dir, ".").map_err(|err| Error::CommonFileError {
