@@ -112,7 +112,7 @@ pub struct Reactor {
 }
 
 impl Reactor {
-    fn new(
+    pub fn new(
         name: impl Into<String>,
         version: impl TryInto<VersionTag>,
         pulishing_url: impl Into<String>,
